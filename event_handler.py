@@ -2,6 +2,7 @@ import re
 import os
 import pymongo
 
+# create a response to a user submitting a score
 def saveScoreEvent( message ):
     messageContent = message.content
     messageAuthor = message.author
@@ -12,11 +13,11 @@ def saveScoreEvent( message ):
     if ( score == -1 ):
         return 'Invalid score in your attempt'
     
-    # store user submission in MongoDB
     froggieDB = getMongoDBClient()
     attempts = froggieDB['Attempts']
     users = froggieDB['Users']
     userExists = users.find_one( {'_id': messageAuthor.display_name} )
+    # if this is a new user, make a record of them in the 'Users' collection in MongoDB
     if ( not userExists ):
         userEntry = { '_id': messageAuthor.display_name, 'discordUserID': messageAuthor.id }
         users.insert_one( userEntry )
@@ -24,10 +25,10 @@ def saveScoreEvent( message ):
 
     entry = { 'discordUserID': messageAuthor.id, 'nickname': messageAuthor.display_name, 'day': day, 'score': score }
     attempts.insert_one( entry )
+    return getPlayerStatsString( attempts, messageAuthor.id, messageAuthor.display_name )
 
-    return f'{messageAuthor.display_name}, your score has been saved.'
-
-def retrievePlayerStats( message ):
+# create a response to a user requesting the stats of a player
+def requestPlayerStatsEvent( message ):
     froggieDB = getMongoDBClient()
     users = froggieDB['Users']
     attempts = froggieDB['Attempts']
@@ -37,32 +38,66 @@ def retrievePlayerStats( message ):
     if ( not requestedUserEntry ):
         return f'could not find user with name of {requestedUser}'
     requestedUserID = requestedUserEntry['discordUserID']
+    return getPlayerStatsString( attempts, requestedUserID, requestedUser )
 
+# create a response to a user requesting a leaderboard
+def leaderboardEvent( message, client ):
+    froggieDB = getMongoDBClient()
+    leaderboard = {}
+    users = froggieDB['Users']
+    attempts = froggieDB['Attempts']
+    userCursor = users.find()
+    # iterate over all users and record their scores in the leaderboard dict
+    for user in userCursor:
+        discordUserID = int( user['discordUserID'] )
+        discordUserName = client.get_user( discordUserID ).display_name
+        userPoints = 0
+        for i in range ( 1, 8 ):
+            if ( not i == 7 ):
+                attemptCount = attempts.count_documents( {'discordUserID': discordUserID, 'score': i} )
+                userPoints = userPoints + ( attemptCount * ( 8 - i ) )
+            else:
+                attemptCount = attempts.count_documents( {'discordUserID': discordUserID, 'score': i-7} )
+                userPoints = userPoints + attemptCount
+        leaderboard[discordUserName] = userPoints
+    # sort the dictionary according to score
+    sortedLeaderboard = dict( reversed( sorted( leaderboard.items(), key=lambda item: item[1] ) ) )
+    # build the leaderboard string
+    returnMsg = 'Username                | Score\n'
+    returnMsg = returnMsg + '--------------------------------\n'
+    for user in sortedLeaderboard:
+        userRecord = user
+        if ( len( user ) < 24 ):
+            for i in range( 0, 24 - len( user ) ):
+                userRecord = userRecord + ' '
+        userRecord = userRecord + f'| {sortedLeaderboard.get( user )}\n'
+        returnMsg = returnMsg + userRecord
+    return returnMsg
+
+# delete all the collections in the MongoDB FroggieDB
+def deleteAllCollectionsEvent():
+    froggieDB = getMongoDBClient()
+    users = froggieDB['Users']
+    attempts = froggieDB['Attempts']
+    userDeletions = users.delete_many( {} )
+    attemptsDeletions = attempts.delete_many( {} )
+    return f'deleted {userDeletions.deleted_count} users and {attemptsDeletions.deleted_count} attempts'
+
+# return a string which displays the users stats
+def getPlayerStatsString( attempts, discordUserID, discordUserDisplayName ):
     userPoints = 0
-    numAttempts = attempts.count_documents( {'discordUserID': requestedUserID} )
-    numOneAttempts = attempts.count_documents( {'discordUserID': requestedUserID, 'score': 1} )
-    userPoints = userPoints + 7
-    numTwoAttempts = attempts.count_documents( {'discordUserID': requestedUserID, 'score': 2} )
-    userPoints = userPoints + 6
-    numThreeAttempts = attempts.count_documents( {'discordUserID': requestedUserID, 'score': 3} )
-    userPoints = userPoints + 5
-    numFourAttempts = attempts.count_documents( {'discordUserID': requestedUserID, 'score': 4} )
-    userPoints = userPoints + 4
-    numFiveAttempts = attempts.count_documents( {'discordUserID': requestedUserID, 'score': 5} )
-    userPoints = userPoints + 3
-    numSixAttempts = attempts.count_documents( {'discordUserID': requestedUserID, 'score': 6} )
-    userPoints = userPoints + 2
-    numFailedAttempts = attempts.count_documents( {'discordUserID': requestedUserID, 'score': 0} )
-    userPoints = userPoints + 1
-    
-    return f'''{requestedUser} has {numAttempts} total attempts with {userPoints} points
-    > 1/6 attempts: {numOneAttempts}
-    > 2/6 attempts: {numTwoAttempts}
-    > 3/6 attempts: {numThreeAttempts}
-    > 4/6 attempts: {numFourAttempts}
-    > 5/6 attempts: {numFiveAttempts}
-    > 6/6 attempts: {numSixAttempts}
-    > X/6 attempts: {numFailedAttempts}'''
+    numAttempts = attempts.count_documents( {'discordUserID': discordUserID} )
+    scoreString = ''
+    for i in range( 1, 8 ):
+        if ( not i == 7 ):
+            attemptCount = attempts.count_documents( {'discordUserID': discordUserID, 'score': i} )
+            scoreString = scoreString + f'\t> {i}/6 attempts: {attemptCount}\n'
+            userPoints = userPoints + ( attemptCount * ( 8 - i ) )
+        else:
+            attemptCount = attempts.count_documents( {'discordUserID': discordUserID, 'score': i-7} )
+            scoreString = scoreString + f'\t> X/6 attempts: {attemptCount}'
+            userPoints = userPoints + attemptCount
+    return f'{discordUserDisplayName} has {numAttempts} total attempts with {userPoints} points\n{scoreString}'
 
 # open a new MongoDB client to store and request data
 def getMongoDBClient():
@@ -90,6 +125,7 @@ def getScoreFromMessage( messageContent ):
     score = int( scoreStr )
     return score
 
+# get the name of the user from a stat request message
 def getUserFromStatRequestMessage( message ):
     messageContent = message.content
     whitespaceIndex = messageContent.find( " " )
