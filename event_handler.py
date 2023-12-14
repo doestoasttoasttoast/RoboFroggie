@@ -7,8 +7,14 @@ def saveScoreEvent( message ):
     messageContent = message.content
     messageAuthor = message.author
     day = getDayFromMessage( messageContent )
+    # Check if a user has already submitted a score for this day
+    froggieDB = getMongoDBClient()
+    attempts = froggieDB['Attempts']
+    attemptExists = attempts.find_one( {'discordUserID': messageAuthor.id, 'day': day} )
     if ( day == -1 ):
         return 'Invalid day in your attempt'
+    if ( attemptExists ):
+        return 'You have already submitted a score for this day'
     score = getScoreFromMessage( messageContent )
     if ( score == -1 ):
         return 'Invalid score in your attempt'
@@ -97,12 +103,12 @@ def getPlayerStatsString( attempts, discordUserID, discordUserDisplayName ):
             attemptCount = attempts.count_documents( {'discordUserID': discordUserID, 'score': i-7} )
             scoreString = scoreString + f'\t> X/6 attempts: {attemptCount}'
             userPoints = userPoints + attemptCount
-    return f'{discordUserDisplayName} has {numAttempts} total attempts with {userPoints} points\n{scoreString}'
+    return f'{discordUserDisplayName} has {numAttempts} total attempts with {userPoints} points. Average score is {round((userPoints/numAttempts), 2)}.\n{scoreString}.'
 
 # open a new MongoDB client to store and request data
 def getMongoDBClient():
     froggieDBPassword = os.environ.get( 'ROBO_FROGGIE_DB_PASSWORD' )
-    dbclient = pymongo.MongoClient( f'mongodb+srv://Seeeab:{froggieDBPassword}@cluster0.c01nt6l.mongodb.net/' )
+    dbclient = pymongo.MongoClient( f'{froggieDBPassword}')
     print( 'connected to MongoDB successfully' )
     return dbclient['FroggieDB']
 
