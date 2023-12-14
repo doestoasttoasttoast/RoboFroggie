@@ -3,7 +3,7 @@ import os
 import sys
 from dotenv import load_dotenv
 
-from event_handler import saveScoreEvent, requestPlayerStatsEvent, leaderboardEvent, deleteAllCollectionsEvent
+from event_handler import saveWordleScoreEvent, saveConnectionsScoreEvent, requestPlayerStatsEvent, leaderboardEvent, deleteAllCollectionsEvent
 
 load_dotenv()
 # grab bot token from .env file
@@ -25,10 +25,6 @@ async def on_ready():
 # react when a message is sent
 @client.event
 async def on_message( message ):
-    # only listen to these two channels
-    if not ( message.channel.id == 986042095322144819 
-            or message.channel.id == 1159553384999813160 ):
-        return
     # ensure the bot doesn't respond to its own messages
     msgAuthor = message.author
     if ( msgAuthor == client.user ):
@@ -39,7 +35,13 @@ async def on_message( message ):
 
     # block for saving wordle scores
     if ( messageContent.startswith( 'Wordle ' ) ):
-        returnMsg = saveScoreEvent( message )
+        returnMsg = saveWordleScoreEvent( message )
+        await message.channel.send( f'```{returnMsg}```' )
+        print( returnMsg )
+
+    # block for saving Connections scores
+    if ( messageContent.startswith( 'Connections ' ) ):
+        returnMsg = saveConnectionsScoreEvent( message )
         await message.channel.send( f'```{returnMsg}```' )
         print( returnMsg )
 
@@ -56,7 +58,7 @@ async def on_message( message ):
         print( returnMsg )
 
     # block for deleting all collections in mongoDB
-    if ( messageContent == 'delete all' and message.channel.id == 1159553384999813160 ):
+    if ( messageContent == 'delete all' ):
         returnMsg = deleteAllCollectionsEvent()
         await message.channel.send( f'```{returnMsg}```' )
         print( returnMsg )
