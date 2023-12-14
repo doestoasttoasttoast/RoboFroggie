@@ -4,7 +4,6 @@ Developed by: [Seab](https://github.com/doestoasttoasttoast)
 
 ## Development and Technologies
 The bot was developed in Python 3.11, using the library [discord.py](https://discordpy.readthedocs.io/en/stable/index.html)
-An image was created using Docker, and hosted by Oracle.
 Data storage is handled by [MongoDB](cloud.mongodb.com), and can be interacted with in Python using [pymongo](https://pymongo.readthedocs.io/en/stable/)
 
 ## Usage
