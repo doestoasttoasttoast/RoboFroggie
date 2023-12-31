@@ -100,7 +100,7 @@ def leaderboardEvent( message, client ):
     # sort the dictionary according to score
     sortedLeaderboard = dict( reversed( sorted( leaderboard.items(), key=lambda item: item[1] ) ) )
     # build the leaderboard string
-    returnMsg = 'Username                | Score\n'
+    returnMsg = 'Username                | Total Score\n'
     returnMsg = returnMsg + '--------------------------------\n'
     for user in sortedLeaderboard:
         userRecord = user
@@ -108,6 +108,37 @@ def leaderboardEvent( message, client ):
             for i in range( 0, 24 - len( user ) ):
                 userRecord = userRecord + ' '
         userRecord = userRecord + f'| {sortedLeaderboard.get( user )}\n'
+        returnMsg = returnMsg + userRecord
+    #Sort by average score
+    leaderboard = {}
+    users = froggieDB['Users']
+    attempts = froggieDB['Attempts']
+    userCursor = users.find()
+    # iterate over all users and record their scores in the leaderboard dict
+    for user in userCursor:
+        discordUserID = int( user['discordUserID'] )
+        discordUserName = client.get_user( discordUserID ).display_name
+        userPoints = 0
+        numAttempts = attempts.count_documents( {'discordUserID': discordUserID} )
+        for i in range ( 1, 8 ):
+            if ( not i == 7 ):
+                attemptCount = attempts.count_documents( {'discordUserID': discordUserID, 'score': i} )
+                userPoints = userPoints + ( attemptCount * ( 8 - i ) )
+            else:
+                attemptCount = attempts.count_documents( {'discordUserID': discordUserID, 'score': i-7} )
+                userPoints = userPoints + attemptCount
+        leaderboard[discordUserName] = userPoints/numAttempts
+    # sort the dictionary according to score
+    sortedLeaderboard = dict( reversed( sorted( leaderboard.items(), key=lambda item: item[1] ) ) )
+    # build the leaderboard string
+    returnMsg = returnMsg + '\n\nUsername                | Average Score\n'
+    returnMsg = returnMsg + '--------------------------------\n'
+    for user in sortedLeaderboard:
+        userRecord = user
+        if ( len( user ) < 24 ):
+            for i in range( 0, 24 - len( user ) ):
+                userRecord = userRecord + ' '
+        userRecord = userRecord + f'| {round(sortedLeaderboard.get( user ), 2)}\n'
         returnMsg = returnMsg + userRecord
     return returnMsg
 
